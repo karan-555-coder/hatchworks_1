@@ -7,6 +7,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { themeDist } from './theme.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'src');
@@ -44,7 +45,8 @@ for (const name of COMPONENTS) {
 }
 
 // --- clean + static copies --------------------------------------------------
-await fs.rm(DIST, { recursive: true, force: true });
+// retries: sync clients / antivirus can hold files in dist/ for a moment (EBUSY on Windows)
+await fs.rm(DIST, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 await fs.mkdir(DIST, { recursive: true });
 for (const d of ['assets', 'shared', 'styles', 'scripts', 'data']) await copyDir(path.join(SRC, d), path.join(DIST, d));
 for (const name of COMPONENTS) {
@@ -132,6 +134,12 @@ for (const [from, to] of Object.entries(site.redirects || {})) {
     `<script>location.replace(${JSON.stringify(to)} + location.hash)</script></head>` +
     `<body><a href="${esc(to)}">Continue</a></body></html>\n`);
   redirects++;
+}
+
+// --- neo-brutalist colour theme (THEME=off builds the original palette) -----------
+if (process.env.THEME !== 'off') {
+  const t = await themeDist(DIST);
+  console.log(`Themed ${t.css} stylesheets, ${t.html} pages and ${t.js} scripts`);
 }
 
 console.log(`Built ${count} pages and ${redirects} redirects into dist/`);
